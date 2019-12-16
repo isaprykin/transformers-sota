@@ -1,0 +1,6 @@
+[BASIC]
+docstring-min-length=10
+
+[FORMAT]
+indent-string='  '
+max-line-length=80
