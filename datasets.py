@@ -2,6 +2,7 @@
 
 import collections
 import io
+import itertools
 import pathlib
 import os
 import logging
@@ -15,33 +16,42 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def obtain(dataset_directory):
-  for dataset in _DATASETS_:
+  for dataset in itertools.chain(*_DATASETS_.values()):
     download_if_not_there(dataset, dataset_directory)
 
-  tokenizer = create_tokenizer(_DATASETS_, dataset_directory)
-  full_corpus = read_corpus(_DATASETS_, dataset_directory)
-  encode_corpus(full_corpus, tokenizer, dataset_directory)
+  tokenizer = create_tokenizer(_DATASETS_['train'], dataset_directory)
+
+  for label, datasets in _DATASETS_.items():
+    full_corpus = read_corpus(datasets, dataset_directory)
+    encode_corpus(full_corpus, tokenizer, dataset_directory, prefix=label)
 
 
 Dataset = collections.namedtuple(
     'Dataset', ('url', 'language_1_filename', 'language_2_filename'))
 
 
-_DATASETS_ = (
-    Dataset(url='http://data.statmt.org/wmt18/translation-task/' +
-            'training-parallel-nc-v13.tgz',
-            language_1_filename='training-parallel-nc-v13/' +
-            'news-commentary-v13.de-en.en',
-            language_2_filename='training-parallel-nc-v13/' +
-            'news-commentary-v13.de-en.de'),
-    Dataset(url='http://www.statmt.org/wmt13/training-parallel-commoncrawl.tgz',
+_DATASETS_ = {
+    'train': (
+        Dataset(url='http://data.statmt.org/wmt18/translation-task/' +
+                'training-parallel-nc-v13.tgz',
+                language_1_filename='training-parallel-nc-v13/' +
+                'news-commentary-v13.de-en.en',
+                language_2_filename='training-parallel-nc-v13/' +
+                'news-commentary-v13.de-en.de'),
+        Dataset(
+            url='http://www.statmt.org/wmt13/training-parallel-commoncrawl.tgz',
             language_1_filename='commoncrawl.de-en.en',
             language_2_filename='commoncrawl.de-en.de'),
-    Dataset(url='http://www.statmt.org/wmt13/training-parallel-europarl-v7.tgz',
+        Dataset(
+            url='http://www.statmt.org/wmt13/training-parallel-europarl-v7.tgz',
             language_1_filename='training/europarl-v7.de-en.en',
             language_2_filename='training/europarl-v7.de-en.de'),
-)
-
+    ),
+    'eval':
+    (Dataset(url='http://data.statmt.org/wmt17/translation-task/dev.tgz',
+             language_1_filename='dev/newstest2013.en',
+             language_2_filename='dev/newstest2013.de'), ),
+}
 
 def download_if_not_there(dataset, local_directory):
   def does_exist(filename):
@@ -131,7 +141,7 @@ def sample_corpus(datasets, directory, sample_within_byte_budget=1e6):
         yield line
 
 
-def encode_corpus(full_corpus, tokenizer, dataset_directory):
+def encode_corpus(full_corpus, tokenizer, dataset_directory, prefix=None):
   """Encode the whole corpus and store it locally.
 
   Args:
@@ -142,10 +152,14 @@ def encode_corpus(full_corpus, tokenizer, dataset_directory):
           stored.  There is going to be a separate file for inputs and targets.
           If the encoded files are already present then the function is not
           going to repeat the process.
+      prefix:  An optional prefix that can be appeneded to the filenames.
   """
   dataset_directory = pathlib.Path(dataset_directory)
-  inputs_file_path = dataset_directory / 'inputs'
-  targets_file_path = dataset_directory / 'targets'
+
+  prefix = prefix + '-'
+  inputs_file_path = dataset_directory / (prefix + 'inputs')
+  targets_file_path = dataset_directory / (prefix + 'targets')
+
   if (inputs_file_path.exists() and targets_file_path.exists()):
     _LOGGER.info('Re-using encoded dataset files in %s: %s and %s.',
                  dataset_directory, inputs_file_path, targets_file_path)
