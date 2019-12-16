@@ -8,7 +8,7 @@ import logging
 import tarfile
 import urllib.request
 
-import tokenizer
+import tokenizer as tokenizr
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -18,10 +18,7 @@ def obtain(dataset_directory):
   for dataset in _DATASETS_:
     download_if_not_there(dataset, dataset_directory)
 
-  samples = sample_corpus(_DATASETS_, dataset_directory,
-                          sample_within_byte_budget=1e6)
-  tokenizr = tokenizer.Builder(2**15).from_corpus(samples)
-  tokenizr.store_to_file(pathlib.Path(dataset_directory) / 'vocab.subwords')
+  tokenizer = create_tokenizer(_DATASETS_, dataset_directory)
 
 
 Dataset = collections.namedtuple(
@@ -79,30 +76,18 @@ def download_and_extract(dataset, destination_directory):
     archive.extract(untarred_file, path=destination_directory)
 
 
-def read_corpus(datasets, directory):
-  """Read the datasets.
+def create_tokenizer(datasets, directory):
+  """Builds a new vocabulary if needed and returns a Tokenizer."""
+  vocabulary_file = pathlib.Path(directory) / tokenizr.Tokenizer.VOCAB_FILENAME
+  if vocabulary_file.exists():
+    _LOGGER.info('Re-using the vocabulary at %s', vocabulary_file)
+    return tokenizr.Builder.from_file(vocabulary_file)
 
-  Args:
-      datasets: Dataset objects that describe what to read.
-      directory:  The local directory where the datasets are stored.
-
-  Returns:
-      A dictionary with input and targets is going to be returned.
-  """
-  def read_lines(filename):
-    _LOGGER.info('Reading from %s', filename)
-    with open(filename, 'r') as opened_file:
-      for line in opened_file:
-        yield line.strip()
-
-  for dataset in datasets:
-    local_path = pathlib.Path(directory)
-    language_1_path = local_path / dataset.language_1_filename
-    language_2_path = local_path / dataset.language_2_filename
-
-    for inputs, targets in zip(read_lines(language_1_path),
-                               read_lines(language_2_path)):
-      yield {'inputs': inputs, 'targets': targets}
+  samples = sample_corpus(datasets, directory,
+                          sample_within_byte_budget=1e6)
+  tokenizer = tokenizr.Builder(2**15).from_corpus(samples)
+  tokenizer.store_to_file(vocabulary_file)
+  return tokenizer
 
 
 def sample_corpus(datasets, directory, sample_within_byte_budget=1e6):
@@ -142,3 +127,29 @@ def sample_corpus(datasets, directory, sample_within_byte_budget=1e6):
     for path in [language_1_path, language_2_path]:
       for line in read_lines(path):
         yield line
+
+
+def read_corpus(datasets, directory):
+  """Read the datasets.
+
+  Args:
+      datasets: Dataset objects that describe what to read.
+      directory:  The local directory where the datasets are stored.
+
+  Returns:
+      A dictionary with input and targets is going to be returned.
+  """
+  def read_lines(filename):
+    _LOGGER.info('Reading from %s', filename)
+    with open(filename, 'r') as opened_file:
+      for line in opened_file:
+        yield line.strip()
+
+  for dataset in datasets:
+    local_path = pathlib.Path(directory)
+    language_1_path = local_path / dataset.language_1_filename
+    language_2_path = local_path / dataset.language_2_filename
+
+    for inputs, targets in zip(read_lines(language_1_path),
+                               read_lines(language_2_path)):
+      yield {'inputs': inputs, 'targets': targets}

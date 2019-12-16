@@ -56,29 +56,30 @@ class Tokenizer:
 
   def store_to_file(self, filename, add_single_quotes=True):
     """Write the token vocabulary into a file."""
-    with open(filename, "w") as opened_file:
+    with open(filename, 'w') as opened_file:
       for token in self.token_strings:
         if add_single_quotes:
           opened_file.write(
-              "'" + unicode_tokens.unicode_to_native(token) + "'\n")
+              '\'' + unicode_tokens.unicode_to_native(token) + '\'\n')
         else:
           opened_file.write(
-              unicode_tokens.unicode_to_native(token) + "\n")
+              unicode_tokens.unicode_to_native(token) + '\n')
 
-  PAD = "<pad>"
-  EOS = "<EOS>"
+  PAD = '<pad>'
+  EOS = '<EOS>'
   RESERVED_TOKENS = [PAD, EOS]
+  VOCAB_FILENAME = 'vocab.subwords'
 
 
 def _token_ids_to_tokens(token_ids, token_strings):
-  concatenated = "".join(
+  concatenated = ''.join(
       [_token_id_to_token_string(token_id, token_strings)
        for token_id in token_ids])
-  split = concatenated.split("_")
+  split = concatenated.split('_')
   tokens = []
   for part in split:
     if part:
-      unescaped = unicode_tokens.unescape_token(part + "_")
+      unescaped = unicode_tokens.unescape_token(part + '_')
       if unescaped:
         tokens.append(unescaped)
   return tokens
@@ -87,7 +88,7 @@ def _token_ids_to_tokens(token_ids, token_strings):
 def _token_id_to_token_string(token_id, token_strings):
   if 0 <= token_id < len(token_strings):
     return token_strings[token_id]
-  return u""
+  return u''
 
 
 class Builder:
@@ -112,6 +113,20 @@ class Builder:
     self._max_subtoken_length = None
     self._reserved_tokens = Tokenizer.RESERVED_TOKENS
 
+  @staticmethod
+  def from_file(filepath):
+    """Load the Tokenizer from a vocabulary stored in a file."""
+    tokens = []
+    with open(filepath, 'r') as opened_file:
+      for token in opened_file:
+        token = token.rstrip()
+        if token.startswith('\''):
+          assert token.endswith('\'')
+          token = token[1:-1]
+        tokens.append(unicode_tokens.native_to_unicode(token))
+    alphabet = _generate_alphabet(tokens)
+    return Tokenizer(alphabet, tokens)
+
   def from_corpus(self, corpus):  # pylint: disable=too-many-locals
     """Learn vocabulary from the corpus.
 
@@ -132,7 +147,7 @@ class Builder:
     """
     token_counts = _count_tokens(corpus)
 
-    alphabet = _generate_alphabet(token_counts, self._reserved_tokens)
+    alphabet = _generate_alphabet(token_counts.keys(), self._reserved_tokens)
     escaped_reserved_tokens = [
         unicode_tokens.escape_token(unicode_tokens.native_to_unicode(t),
                                     alphabet)
@@ -226,10 +241,10 @@ def _count_tokens(corpus):
   return token_counts
 
 
-def _generate_alphabet(token_counts, reserved_tokens=None):
+def _generate_alphabet(tokens, reserved_tokens=None):
   reserved_tokens = reserved_tokens or []
   universe_of_tokens = itertools.chain(
-      token_counts.keys(),
+      tokens,
       [unicode_tokens.native_to_unicode(t) for t in reserved_tokens],
       unicode_tokens.UNICODE_ESCAPE_CHARACTERS)
   alphabet = set({char for token in universe_of_tokens for char in token})
