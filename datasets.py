@@ -19,6 +19,8 @@ def obtain(dataset_directory):
     download_if_not_there(dataset, dataset_directory)
 
   tokenizer = create_tokenizer(_DATASETS_, dataset_directory)
+  full_corpus = read_corpus(_DATASETS_, dataset_directory)
+  encode_corpus(full_corpus, tokenizer, dataset_directory)
 
 
 Dataset = collections.namedtuple(
@@ -127,6 +129,43 @@ def sample_corpus(datasets, directory, sample_within_byte_budget=1e6):
     for path in [language_1_path, language_2_path]:
       for line in read_lines(path):
         yield line
+
+
+def encode_corpus(full_corpus, tokenizer, dataset_directory):
+  """Encode the whole corpus and store it locally.
+
+  Args:
+      full_corpus:  Iterable of dict{inputs,targets} that represent the full
+          corpus.
+      tokenizer:  Tokenizer instance that is going encode each sample.
+      dataset_directory:  The local path where the encoded files are going to
+          stored.  There is going to be a separate file for inputs and targets.
+          If the encoded files are already present then the function is not
+          going to repeat the process.
+  """
+  dataset_directory = pathlib.Path(dataset_directory)
+  inputs_file_path = dataset_directory / 'inputs'
+  targets_file_path = dataset_directory / 'targets'
+  if (inputs_file_path.exists() and targets_file_path.exists()):
+    _LOGGER.info('Re-using encoded dataset files in %s: %s and %s.',
+                 dataset_directory, inputs_file_path, targets_file_path)
+    return
+
+  eos_id = tokenizer.RESERVED_TOKENS.index(tokenizer.EOS)
+
+  with open(inputs_file_path, 'w') as inputs_file, \
+       open(targets_file_path, 'w') as targets_file:
+    samples_written = 0
+    for sample in full_corpus:
+      inputs = tokenizer.encode(sample['inputs']) + [eos_id]
+      targets = tokenizer.encode(sample['targets']) + [eos_id]
+
+      inputs_file.write(' '.join([str(i) for i in inputs]) + ' ')
+      targets_file.write(' '.join([str(t) for t in targets]) + ' ')
+      samples_written += 1
+      if samples_written % 100000 == 0:
+        _LOGGER.info('Encoded %d samples so far...', samples_written)
+    _LOGGER.info('Encoded %d samples total.', samples_written)
 
 
 def read_corpus(datasets, directory):
