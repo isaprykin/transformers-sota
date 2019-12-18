@@ -4,3 +4,6 @@ docstring-min-length=10
 [FORMAT]
 indent-string='  '
 max-line-length=80
+
+[TYPECHECK]
+generated-members=numpy.*,torch.*
