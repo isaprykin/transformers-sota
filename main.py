@@ -1,6 +1,8 @@
 """Download datasets and train transformer-based models."""
 import argparse
 import logging
+
+import batching
 import datasets
 
 
@@ -16,7 +18,8 @@ def main():
   args = parser.parse_args()
   logging.basicConfig(level=getattr(logging, args.log_level.upper(), None))
 
-  datasets.obtain(args.dataset_directory)
+  data = datasets.obtain(args.dataset_directory)
+  batches = batching.produce_batches(data['train'], 512)
 
 
 if __name__ == '__main__':

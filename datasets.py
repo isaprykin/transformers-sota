@@ -16,14 +16,26 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def obtain(dataset_directory):
+  """Download, store and encode datasets.
+
+  Args:
+      dataset_directory: where to store the materials.
+
+  Returns:
+      A dictionary of generators for various dataset splits, such as training
+      or eval.
+  """
   for dataset in itertools.chain(*_DATASETS_.values()):
     download_if_not_there(dataset, dataset_directory)
 
   tokenizer = create_tokenizer(_DATASETS_['train'], dataset_directory)
 
+  encoded_datasets = {}
   for label, datasets in _DATASETS_.items():
     full_corpus = read_corpus(datasets, dataset_directory)
-    encode_corpus(full_corpus, tokenizer, dataset_directory, prefix=label)
+    encoded_datasets[label] = encode_corpus(
+        full_corpus, tokenizer, dataset_directory, prefix=label)
+  return encoded_datasets
 
 
 Dataset = collections.namedtuple(
@@ -141,11 +153,11 @@ def sample_corpus(datasets, directory, sample_within_byte_budget=1e6):
         yield line
 
 
-def encode_corpus(full_corpus, tokenizer, dataset_directory, prefix=None):
+def encode_corpus(corpus, tokenizer, dataset_directory, prefix=None):
   """Encode the whole corpus and store it locally.
 
   Args:
-      full_corpus:  Iterable of dict{inputs,targets} that represent the full
+      corpus:  Iterable of dict{inputs,targets} that represent the full
           corpus.
       tokenizer:  Tokenizer instance that is going encode each sample.
       dataset_directory:  The local path where the encoded files are going to
@@ -153,33 +165,38 @@ def encode_corpus(full_corpus, tokenizer, dataset_directory, prefix=None):
           If the encoded files are already present then the function is not
           going to repeat the process.
       prefix:  An optional prefix that can be appeneded to the filenames.
+
+  Returns:
+      A generator that reads from all produced files for further processing.
   """
   dataset_directory = pathlib.Path(dataset_directory)
 
-  prefix = prefix + '-'
-  inputs_file_path = dataset_directory / (prefix + 'inputs')
-  targets_file_path = dataset_directory / (prefix + 'targets')
+  inputs_file_path = dataset_directory / (prefix + '-inputs')
+  targets_file_path = dataset_directory / (prefix + '-targets')
 
-  if (inputs_file_path.exists() and targets_file_path.exists()):
+  if inputs_file_path.exists() and targets_file_path.exists():
     _LOGGER.info('Re-using encoded dataset files in %s: %s and %s.',
                  dataset_directory, inputs_file_path, targets_file_path)
-    return
+  else:  # We are going to have to re-encode the whole corpus.
+    eos_id = tokenizer.RESERVED_TOKENS.index(tokenizer.EOS)
 
-  eos_id = tokenizer.RESERVED_TOKENS.index(tokenizer.EOS)
+    with open(inputs_file_path, 'w') as inputs_file, \
+         open(targets_file_path, 'w') as targets_file:
+      samples_written = 0
+      for sample in corpus:
+        inputs = tokenizer.encode(sample['inputs']) + [eos_id]
+        targets = tokenizer.encode(sample['targets']) + [eos_id]
 
-  with open(inputs_file_path, 'w') as inputs_file, \
-       open(targets_file_path, 'w') as targets_file:
-    samples_written = 0
-    for sample in full_corpus:
-      inputs = tokenizer.encode(sample['inputs']) + [eos_id]
-      targets = tokenizer.encode(sample['targets']) + [eos_id]
+        inputs_file.write(' '.join([str(i) for i in inputs]) + '\n')
+        targets_file.write(' '.join([str(t) for t in targets]) + '\n')
+        samples_written += 1
+        if samples_written % 100000 == 0:
+          _LOGGER.info('Encoded %d samples so far...', samples_written)
+      _LOGGER.info('Encoded %d %s samples total.', samples_written, prefix)
 
-      inputs_file.write(' '.join([str(i) for i in inputs]) + ' ')
-      targets_file.write(' '.join([str(t) for t in targets]) + ' ')
-      samples_written += 1
-      if samples_written % 100000 == 0:
-        _LOGGER.info('Encoded %d samples so far...', samples_written)
-    _LOGGER.info('Encoded %d samples total.', samples_written)
+  for inputs, targets in zip(_read_lines(inputs_file_path),
+                             _read_lines(targets_file_path)):
+    yield {'inputs': inputs, 'targets': targets}
 
 
 def read_corpus(datasets, directory):
@@ -192,17 +209,18 @@ def read_corpus(datasets, directory):
   Returns:
       A dictionary with input and targets is going to be returned.
   """
-  def read_lines(filename):
-    _LOGGER.info('Reading from %s', filename)
-    with open(filename, 'r') as opened_file:
-      for line in opened_file:
-        yield line.strip()
-
   for dataset in datasets:
     local_path = pathlib.Path(directory)
     language_1_path = local_path / dataset.language_1_filename
     language_2_path = local_path / dataset.language_2_filename
 
-    for inputs, targets in zip(read_lines(language_1_path),
-                               read_lines(language_2_path)):
+    for inputs, targets in zip(_read_lines(language_1_path),
+                               _read_lines(language_2_path)):
       yield {'inputs': inputs, 'targets': targets}
+
+
+def _read_lines(filename):
+  _LOGGER.info('Reading from %s', filename)
+  with open(filename, 'r') as opened_file:
+    for line in opened_file:
+      yield line.strip()
