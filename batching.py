@@ -12,8 +12,7 @@ def produce_batches(data, batch_size):
   dataset = TokenDataset(data)
   data_loader = torch.utils.data.DataLoader(
       dataset,
-      batch_sampler=BucketSampler(dataset, batch_size=batch_size,
-                                  maximum_length=256),
+      batch_sampler=BucketSampler(dataset, batch_size=batch_size),
       collate_fn=PadBatch(dim=0))
   return data_loader
 
@@ -49,6 +48,8 @@ class BucketSampler(torch.utils.data.Sampler):
 
   def __init__(self, dataset, batch_size, maximum_length=None):
     super(BucketSampler, self).__init__(dataset)
+    if maximum_length is None:
+      maximum_length = batch_size
     # Create buckets for sequence lengths.  Each bucket has a minimum and
     # a maximum boundary up to maximum_length.
     buckets_min, buckets_max = _create_min_max_boundaries(maximum_length)
