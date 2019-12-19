@@ -109,7 +109,7 @@ class PadBatch:
   """After the batch is formed, pad its constituents as needed."""
 
   def __init__(self, dim):
-    self.dim = dim
+    self._dim = dim
 
   _PAD_ID = tokenizer.Tokenizer.RESERVED_TOKENS.index(tokenizer.Tokenizer.PAD)
 
@@ -121,15 +121,15 @@ class PadBatch:
     max_targets_len = max(map(lambda s: len(s[1]), batch))
 
     def pad(inputs, targets):
-      return (self._pad_tensor(inputs, pad=max_inputs_len, dim=self.dim),
-              self._pad_tensor(targets, pad=max_targets_len, dim=self.dim))
+      return (self._pad_tensor(inputs, pad=max_inputs_len),
+              self._pad_tensor(targets, pad=max_targets_len))
 
     batch = list(map(lambda sample: pad(*sample), batch))
 
     return list(map(torch.stack, zip(*batch)))
 
-  def _pad_tensor(self, vec, pad, dim):
+  def _pad_tensor(self, vec, pad):
     pad_size = list(vec.shape)
-    pad_size[dim] = pad - vec.shape[dim]
+    pad_size[self._dim] = pad - vec.shape[self._dim]
     pad_tensor = torch.full(pad_size, PadBatch._PAD_ID, dtype=torch.long)
-    return torch.cat([vec, pad_tensor], dim=dim)
+    return torch.cat([vec, pad_tensor], dim=self._dim)
