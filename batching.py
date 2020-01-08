@@ -59,6 +59,8 @@ class BucketSampler(torch.utils.data.Sampler):
     buckets = collections.defaultdict(list)
     for index, (inputs, targets) in enumerate(dataset):
       length = max(inputs.shape[0], targets.shape[0])
+      if length > maximum_length:
+        continue
 
       bucket_map = torch.le(buckets_min, length) & torch.gt(buckets_max, length)
       bucket_id = torch.min(torch.nonzero(bucket_map)).item()
