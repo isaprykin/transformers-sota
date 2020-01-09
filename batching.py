@@ -62,7 +62,7 @@ class BucketSampler(torch.utils.data.Sampler):
       if length > maximum_length:
         continue
 
-      bucket_map = torch.le(buckets_min, length) & torch.gt(buckets_max, length)
+      bucket_map = torch.le(buckets_min, length) & torch.ge(buckets_max, length)
       bucket_id = torch.min(torch.nonzero(bucket_map)).item()
       buckets[bucket_id].append(index)
 
@@ -98,7 +98,7 @@ def _create_min_max_boundaries(max_length,
     boundary = max(boundary + 1, int(boundary * boundary_scale))
 
   buckets_min = [0] + bucket_boundaries
-  buckets_max = bucket_boundaries + [max_length + 1]
+  buckets_max = bucket_boundaries + [max_length]
   return (torch.from_numpy(np.asarray(buckets_min)),
           torch.from_numpy(np.asarray(buckets_max)))
 
