@@ -75,8 +75,10 @@ class BucketSampler(torch.utils.data.Sampler):
     for bucket_id, indices in buckets.items():
       indices = torch.IntTensor(indices)
       _shuffle(indices)
-      self._batches_of_indices += torch.chunk(indices,
-                                              bucket_batch_sizes[bucket_id])
+      # Split the full 'indices' tensor into parts up to
+      # 'bucket_batch_sizes[bucket_id]' indices long each.
+      splits = torch.split(indices, bucket_batch_sizes[bucket_id].item())
+      self._batches_of_indices += splits
     random.shuffle(self._batches_of_indices)
 
   def __iter__(self):
