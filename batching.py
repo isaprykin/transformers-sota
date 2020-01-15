@@ -1,11 +1,37 @@
 """Produce more or less evenly distributed batches from variable length data."""
 import collections
+import logging
+import pathlib
 import random
 
 import numpy as np
 import torch
 
 import tokenizer
+
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def get_batches(batches_directory, data, batch_size):
+  filename = _BATCHES_FILENAME_PATTERN.format(batch_size)
+  batches_file_path = pathlib.Path(batches_directory) / filename
+
+  if not batches_file_path.exists():
+    _LOGGER.info('Batching the corpus into {}.'.format(
+        batches_file_path))
+    batches = produce_batches(data, batch_size)
+    torch.save(batches, batches_file_path)
+  else:
+    _LOGGER.info('Re-using batches from {}.'.format(
+        batches_file_path))
+
+  batches = torch.load(batches_file_path)
+  for batch in batches:
+    yield batch
+
+
+_BATCHES_FILENAME_PATTERN = 'batches.{}.pt'
 
 
 def produce_batches(data, batch_size):
